@@ -1,22 +1,25 @@
-#include "./tcp.hpp"
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+// #define WIN_MEAN_AND_LEAN
+// #include <windows.h>
+
 #include <iostream>
 #include <cstring>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
-TCPConnection::TCPConnection(
-        const std::string& host,
-        int port
-)
-        : host(host)
-        , port(port)
+#include "win32_util.h"
+#include "tcp.hpp"
+
+
+
+TCPConnection::TCPConnection(const std::string& host, int port)
+   : host(host)
+   , port(port)
 {}
 
 void TCPConnection::connect() {
     sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock < 0) {
+    if (sock == INVALID_SOCKET) {
         std::cout << "Error on creating socket (err=" << errno << ", " << strerror(errno) << ")" << std::endl;
         return;
     }
@@ -26,32 +29,42 @@ void TCPConnection::connect() {
     sa.sin_family = AF_INET;
     sa.sin_addr.s_addr = inet_addr(host.c_str());
     sa.sin_port = htons(port);
-    socklen_t socklen = sizeof(sa);
+    // InetPton(AF_INET, host.c_str(), &sa.sin_addr.s_addr);
 
-    auto connect_ret = ::connect(sock, (struct sockaddr*)&sa, socklen);
+    auto connect_ret = ::connect(sock, (struct sockaddr*)&sa, sizeof(sa));
     if (connect_ret) {
-        std::cout << "Error connecting to server (err=" << errno << ", " << strerror(errno) << ")" << " " << host << std::endl;
+       int wsa_errno = WSAGetLastError();
+        std::cout << "Error connecting to server (err=" << wsa_errno << ", " << strerror(wsa_errno) << ")" << " " << host << std::endl;
         return;
     }
 }
 
 void TCPConnection::close() {
+#ifdef _WIN32
+   if( ::closesocket(sock) != 0) {
+      int wsa_errno = WSAGetLastError();
+      std::cout << "Error closing socket (err=" << wsa_errno << ", " << strerror(wsa_errno) << ")" << " " << host << std::endl;
+
+   }
+#else
     ::close(sock);
+#endif
 }
 
-void TCPConnection::send(const bytes_t& packet) {
-    if (::send(sock, packet.data(), packet.size(), 0) < 0) {
+void TCPConnection::send(const bytes_t& packet)
+{
+    if (::send(sock, (char *) packet.data(), packet.size(), 0) < 0) {
         std::cout << "TCPConnection(" << host << ")::send: " << "sending failed" << std::endl;
     }
 }
 
 bytes_t TCPConnection::recv() {
-    int buf_size = 1 << 16;
+    const int buf_size = 4096;
     std::uint8_t buf[buf_size];
     bytes_t recv_data;
     while (true) {
         int recv_size;
-        if ((recv_size = ::recv(sock, buf, buf_size, 0)) < 0) {
+        if ((recv_size = ::recv(sock, (char *) buf, buf_size, 0)) < 0) {
             perror("reading stream message");
             break;
         }

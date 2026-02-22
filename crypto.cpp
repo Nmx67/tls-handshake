@@ -1,4 +1,3 @@
-#include "./crypto.hpp"
 #include <stdexcept>
 #include <cassert>
 #include <openssl/pem.h>
@@ -9,6 +8,9 @@
 #include <openssl/err.h>
 #include <openssl/sha.h>
 #include <openssl/hmac.h>
+
+#include "crypto.hpp"
+
 
 bytes_t sha1(const bytes_t& buffer) {
     std::uint8_t hash[SHA_DIGEST_LENGTH];
@@ -47,13 +49,13 @@ bytes_t rsa_encrypt(const bytes_t& key, const bytes_t& buffer) {
     auto* key_data = key.data();
     X509* x509 = d2i_X509(NULL, &key_data, key.size());
     EVP_PKEY* pkey = X509_get_pubkey(x509);
-    RSA* rsa = EVP_PKEY_get0_RSA(pkey);
+    const RSA* rsa = EVP_PKEY_get0_RSA(pkey);
     std::uint8_t encrypted_buf[1000]; // FIXME
     int encrypted_size = RSA_public_encrypt(
             buffer.size(),
             buffer.data(),
             encrypted_buf,
-            rsa,
+            const_cast<RSA*>(rsa),
             RSA_PKCS1_PADDING
     );
     return bytes_t(encrypted_buf, encrypted_buf + encrypted_size);
@@ -174,14 +176,16 @@ int _aes128_decrypt(const unsigned char *ciphertext, int ciphertext_len, const u
     return plaintext_len;
 }
 
-bytes_t aes128_encrypt(const bytes_t& key, const bytes_t& iv, const bytes_t& buffer) {
-    std::uint8_t buffer_encrypted[buffer.size() + (16 - buffer.size() % 16) % 16];
-    int encrypted_size = _aes128_encrypt(buffer.data(), buffer.size(), key.data(), iv.data(), buffer_encrypted);
-    return bytes_t(buffer_encrypted, buffer_encrypted + encrypted_size);
+bytes_t aes128_encrypt(const bytes_t& key, const bytes_t& iv, const bytes_t& buffer)
+{
+   bytes_t buffer_encrypted(buffer.size() + (16 - buffer.size() % 16) % 16);
+   int encrypted_size = _aes128_encrypt(buffer.data(), buffer.size(), key.data(), iv.data(), buffer_encrypted.data());
+   return bytes_t(buffer_encrypted.begin(), buffer_encrypted.begin() + encrypted_size);
 }
 
-bytes_t aes128_decrypt(const bytes_t& key, const bytes_t& iv, const bytes_t& buffer) {
-    std::uint8_t buffer_decrypted[buffer.size() + (16 - buffer.size() % 16) % 16];
-    int decrypted_size = _aes128_decrypt(buffer.data(), buffer.size(), key.data(), iv.data(), buffer_decrypted);
-    return bytes_t(buffer_decrypted, buffer_decrypted + decrypted_size);
+bytes_t aes128_decrypt(const bytes_t& key, const bytes_t& iv, const bytes_t& buffer)
+{
+   bytes_t buffer_decrypted(buffer.size() + (16 - buffer.size() % 16) % 16);
+   int decrypted_size = _aes128_decrypt(buffer.data(), buffer.size(), key.data(), iv.data(), buffer_decrypted.data());
+   return bytes_t(buffer_decrypted.begin(), buffer_decrypted.begin() + decrypted_size);
 }

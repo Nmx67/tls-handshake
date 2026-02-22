@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "./bytes.hpp"
+#include "bytes.hpp"
 
 class Keys {
 public:

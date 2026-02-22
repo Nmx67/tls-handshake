@@ -1,4 +1,4 @@
-#include "./bytes.hpp"
+#include "bytes.hpp"
 #include <algorithm>
 #include <random>
 
